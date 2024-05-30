@@ -40,6 +40,7 @@ func saveDataToSpreadSheet(events []Event) {
 	spreadSheetId := "1G8eLUjCeqBZ9dqQJiWxJ3GfjBS9Oqd4_lLnaRMsCbYo"
 
 	log.Println("...Getting data from Google API")
+
 	// Делаем запрос на получение данных с Google Sheets API
 	spreadSheetRes, err := srv.Spreadsheets.Get(spreadSheetId).Fields("sheets(properties(sheetId,title))").Do()
 	if err != nil {
@@ -50,7 +51,6 @@ func saveDataToSpreadSheet(events []Event) {
 	// Создаем отображение для хранения названий листов по их идентификаторам
 	sheetNamesById := make(map[int64]string)
 
-	log.Println("...Getting sheets name from Google API...")
 	// Проходим по всем листам в ответе от Google Sheets API
 	for _, sheet := range spreadSheetRes.Sheets {
 		props := sheet.Properties
@@ -69,10 +69,9 @@ func saveDataToSpreadSheet(events []Event) {
 	concertEvents := [][]interface{}{}
 	theatreEvents := [][]interface{}{}
 
-	log.Println("...Getting pack all events to sheets")
 	// Фасуем события по срезам
 	for _, event := range events {
-		row := []interface{}{event.Location, event.Date, event.Location, event.Link, event.EventType}
+		row := []interface{}{event.Title, event.Date, event.Location, event.Link, event.EventType}
 		switch event.EventType {
 		case "Концерт":
 			concertEvents = append(concertEvents, row)
@@ -87,19 +86,21 @@ func saveDataToSpreadSheet(events []Event) {
 }
 
 func saveToSheet(srv *sheets.Service, ctx context.Context, spreadSheetId, sheetName string, values [][]interface{}) {
+	log.Printf("Saving data to spreadsheet: %s, sheet: %s", spreadSheetId, sheetName)
+
 	records := sheets.ValueRange{
 		Values: values,
 	}
 
-	log.Println("...Appending values into sheetsj")
 	_, err := srv.Spreadsheets.Values.Append(spreadSheetId, sheetName, &records).
 		ValueInputOption("USER_ENTERED").
 		InsertDataOption("INSERT_ROWS").
 		Context(ctx).Do()
 
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Error saving data to spreadsheet: %v", err)
 		return
 	}
-}
 
+	log.Println("Data saved successfully")
+}

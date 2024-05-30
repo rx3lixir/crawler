@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/url"
 	"strings"
 
 	"github.com/gocolly/colly"
@@ -16,12 +17,13 @@ type Event struct {
 }
 
 type SiteConfig struct {
-	UrlToVisit       string
-	EventType        string
-	TitleSelector    string
-	DateSelector     string
-	LocationSelector string
-	LinkSelector     string
+	UrlToVisit        string
+	EventType         string
+	AnchestorSelector string
+	TitleSelector     string
+	DateSelector      string
+	LocationSelector  string
+	LinkSelector      string
 }
 
 func extractEvents(config SiteConfig) []Event {
@@ -29,20 +31,35 @@ func extractEvents(config SiteConfig) []Event {
 
 	c := colly.NewCollector()
 
-	c.OnHTML(config.TitleSelector, func(element *colly.HTMLElement) {
-		elemDOM := element.DOM
+	c.OnHTML(config.AnchestorSelector, func(element *colly.HTMLElement) {
+		baseURL, err := url.Parse(config.UrlToVisit)
 
-		eventToExtract := Event{
-			Title:     elemDOM.Find(config.TitleSelector).Text(),
-			Date:      elemDOM.Find(config.DateSelector).Text(),
-			Location:  strings.TrimSpace(elemDOM.Find(config.LocationSelector).Text()),
-			Link:      config.UrlToVisit,
-			EventType: config.EventType,
+		if err != nil {
+			log.Printf("Error parsing base URL: %v", err)
 		}
 
-		log.Println(eventToExtract)
+		elemDOM := element.DOM
 
-		extractedEvents = append(extractedEvents, eventToExtract)
+		href, exists := elemDOM.Find(config.LinkSelector).Attr("href")
+
+		if exists {
+			link, err := url.Parse(href)
+			if err != nil {
+				log.Printf("Error parsing link URL: %v", err)
+			} else {
+				fullURL := baseURL.ResolveReference(link)
+				eventToExtract := Event{
+					Title:     elemDOM.Find(config.TitleSelector).Text(),
+					Date:      elemDOM.Find(config.DateSelector).Text(),
+					Location:  strings.TrimSpace(elemDOM.Find(config.LocationSelector).Text()),
+					Link:      fullURL.String(),
+					EventType: config.EventType,
+				}
+				extractedEvents = append(extractedEvents, eventToExtract)
+			}
+		} else {
+			log.Printf("No href found for %s", elemDOM.Find(config.TitleSelector).Text())
+		}
 	})
 
 	c.OnRequest(func(r *colly.Request) {
@@ -54,6 +71,7 @@ func extractEvents(config SiteConfig) []Event {
 		log.Fatal(err)
 	}
 
+	log.Println(extractedEvents)
 	return extractedEvents
 }
 
