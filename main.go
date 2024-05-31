@@ -1,8 +1,14 @@
 package main
 
+import (
+	"github.com/rx3lixir/crawler/config"
+	"github.com/rx3lixir/crawler/spreadsheets"
+	"github.com/rx3lixir/crawler/web"
+)
+
 func main() {
 
-	afishaConfigConcert := SiteConfig{
+	afishaConfigConcert := configs.SiteConfig{
 		UrlToVisit:        "https://bar.afishagoroda.ru/events/koncert",
 		EventType:         "Концерт",
 		AnchestorSelector: "div.events-elem",
@@ -12,7 +18,7 @@ func main() {
 		LinkSelector:      "a.img-wrap",
 	}
 
-	afishaConfigTheater := SiteConfig{
+	afishaConfigTheater := configs.SiteConfig{
 		UrlToVisit:        "https://bar.afishagoroda.ru/events/teatr",
 		EventType:         "Театр",
 		AnchestorSelector: "div.events-elem",
@@ -22,9 +28,10 @@ func main() {
 		LinkSelector:      "a.img-wrap",
 	}
 
-	SearchSitesConfigs := []SiteConfig{afishaConfigConcert, afishaConfigTheater}
+	SearchSitesConfigs := []configs.SiteConfig{afishaConfigConcert, afishaConfigTheater}
 
-	allEvents := WebScraper(SearchSitesConfigs)
+	allEvents := web.WebScraper(SearchSitesConfigs)
 
-	saveDataToSpreadSheet(allEvents)
+	spreadsheets.SaveDataToSpreadSheet(allEvents)
+
 }

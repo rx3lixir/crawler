@@ -1,9 +1,11 @@
-package main
+package spreadsheets
 
 import (
 	"encoding/base64"
 	"log"
 	"os"
+
+	"github.com/rx3lixir/crawler/config"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
@@ -11,7 +13,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
-func saveDataToSpreadSheet(events []Event) {
+func SaveDataToSpreadSheet(events []configs.EventConfig) {
 	log.Println("Saving data to spreadsheets:")
 
 	// Login logic

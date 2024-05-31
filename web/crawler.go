@@ -1,4 +1,4 @@
-package main
+package web
 
 import (
 	"log"
@@ -6,28 +6,23 @@ import (
 	"strings"
 
 	"github.com/gocolly/colly"
+	"github.com/rx3lixir/crawler/config"
 )
 
-type Event struct {
-	Title     string `json:"title"`
-	Date      string `json:"date"`
-	Location  string `json:"location"`
-	Link      string `json:"link"`
-	EventType string `json:"eventType"`
+func WebScraper(allConfigs []configs.SiteConfig) []configs.EventConfig {
+	scrapedEvents := []configs.EventConfig{}
+
+	for _, config := range allConfigs {
+		events := extractEvents(config)
+
+		scrapedEvents = append(scrapedEvents, events...)
+	}
+
+	return scrapedEvents
 }
 
-type SiteConfig struct {
-	UrlToVisit        string
-	EventType         string
-	AnchestorSelector string
-	TitleSelector     string
-	DateSelector      string
-	LocationSelector  string
-	LinkSelector      string
-}
-
-func extractEvents(config SiteConfig) []Event {
-	var extractedEvents []Event
+func extractEvents(config configs.SiteConfig) []configs.EventConfig {
+	var extractedEvents []configs.EventConfig
 
 	c := colly.NewCollector()
 
@@ -48,7 +43,7 @@ func extractEvents(config SiteConfig) []Event {
 				log.Printf("Error parsing link URL: %v", err)
 			} else {
 				fullURL := baseURL.ResolveReference(link)
-				eventToExtract := Event{
+				eventToExtract := configs.EventConfig{
 					Title:     elemDOM.Find(config.TitleSelector).Text(),
 					Date:      elemDOM.Find(config.DateSelector).Text(),
 					Location:  strings.TrimSpace(elemDOM.Find(config.LocationSelector).Text()),
@@ -73,16 +68,4 @@ func extractEvents(config SiteConfig) []Event {
 
 	log.Println(extractedEvents)
 	return extractedEvents
-}
-
-func WebScraper(configs []SiteConfig) []Event {
-	scrapedEvents := []Event{}
-
-	for _, config := range configs {
-		events := extractEvents(config)
-
-		scrapedEvents = append(scrapedEvents, events...)
-	}
-
-	return scrapedEvents
 }
