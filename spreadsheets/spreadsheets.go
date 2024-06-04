@@ -7,6 +7,7 @@ import (
 
 	"github.com/rx3lixir/crawler/config"
 
+	"github.com/joho/godotenv"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
@@ -15,6 +16,12 @@ import (
 
 func SaveDataToSpreadSheet(events []configs.EventConfig) {
 	log.Println("Saving data to spreadsheets:")
+
+	// Booting all env files
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 
 	// Login logic
 	ctx := context.Background()
@@ -25,21 +32,29 @@ func SaveDataToSpreadSheet(events []configs.EventConfig) {
 		return
 	}
 
+	// Getting config from google API
 	config, err := google.JWTConfigFromJSON(credBytes, "https://www.googleapis.com/auth/spreadsheets")
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
+	// Initalizing client
 	client := config.Client(ctx)
 
+	// Initalizing new spreadsheet service entity
 	srv, err := sheets.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	spreadSheetId := "1G8eLUjCeqBZ9dqQJiWxJ3GfjBS9Oqd4_lLnaRMsCbYo"
+	spreadSheetId := os.Getenv("GOOGLE_SHEET_ID")
+
+	if spreadSheetId == "" {
+		log.Fatal("GOOGLE_SHEET_ID environment variable is not set")
+		return
+	}
 
 	log.Println("...Getting data from Google API")
 
