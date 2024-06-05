@@ -2,134 +2,120 @@ package spreadsheets
 
 import (
 	"encoding/base64"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/rx3lixir/crawler/config"
-
-	"github.com/joho/godotenv"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
 
-func SaveDataToSpreadSheet(events []configs.EventConfig) {
-	log.Println("Saving data to spreadsheets:")
+type sheetDetails struct {
+	Id    int64
+	Title string
+}
 
-	// Booting all env files
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+func WriteToSpreadsheet(events []configs.EventConfig) error {
+	log.Println("WriteToSpreadsheet called")
+
+	// Загружаем переменные окружения
+	keyJSONBase64 := os.Getenv("GOOGLE_AUTH_KEY")
+	spreadSheetId := os.Getenv("SPREADSHEET_ID")
+
+	if keyJSONBase64 == "" || spreadSheetId == "" {
+		return fmt.Errorf("GOOGLE_SHEETS_CREDENTIAL_PATH or SPREADSHEET_ID is not set")
 	}
 
-	// Login logic
+	// Декодируем base64 ключ
+	credBytes, err := base64.StdEncoding.DecodeString(keyJSONBase64)
+	if err != nil {
+		return fmt.Errorf("error decoding key JSON: %v", err)
+	}
+
+	// Логика аутентификации и инициализации клиента Google Sheets
 	ctx := context.Background()
-
-	credBytes, err := base64.StdEncoding.DecodeString(os.Getenv("KEY_JSON_BASE64"))
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	// Getting config from google API
 	config, err := google.JWTConfigFromJSON(credBytes, "https://www.googleapis.com/auth/spreadsheets")
 	if err != nil {
-		log.Fatal(err)
-		return
+		return fmt.Errorf("error creating JWT config: %v", err)
 	}
 
-	// Initalizing client
 	client := config.Client(ctx)
-
-	// Initalizing new spreadsheet service entity
-	srv, err := sheets.NewService(ctx, option.WithHTTPClient(client))
+	service, err := sheets.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	spreadSheetId := os.Getenv("GOOGLE_SHEET_ID")
-
-	if spreadSheetId == "" {
-		log.Fatal("GOOGLE_SHEET_ID environment variable is not set")
-		return
+		return fmt.Errorf("error creating Sheets service: %v", err)
 	}
 
 	log.Println("...Getting data from Google API")
 
 	// Делаем запрос на получение данных с Google Sheets API
-	spreadSheetRes, err := srv.Spreadsheets.Get(spreadSheetId).Fields("sheets(properties(sheetId,title))").Do()
+	spreadSheetRes, err := service.Spreadsheets.Get(spreadSheetId).Fields("sheets(properties(sheetId,title))").Do()
 	if err != nil {
-		log.Fatal(err)
-		return
+		return fmt.Errorf("error getting spreadsheet: %v", err)
 	}
 
 	// Создаем отображение для хранения названий листов по их идентификаторам
 	sheetNamesById := make(map[int64]string)
-
-	// Проходим по всем листам в ответе от Google Sheets API
 	for _, sheet := range spreadSheetRes.Sheets {
 		props := sheet.Properties
 		sheetNamesById[props.SheetId] = props.Title
 	}
 
-	// Идентификаторы листов для "Концерт" и "Театр"
-	sheetIdConcert := int64(0)
-	sheetIdTheatre := int64(434585164)
-	sheetIdFestivali := int64(301169124)
-	sheetIdDetiam := int64(1348865206)
+	// Define sheet details for different event types
+	sheetMap := map[string]sheetDetails{
+		"Концерт":   {Id: 0, Title: sheetNamesById[0]},
+		"Театр":     {Id: 434585164, Title: sheetNamesById[434585164]},
+		"Фестивали": {Id: 301169124, Title: sheetNamesById[301169124]},
+		"Детям":     {Id: 1348865206, Title: sheetNamesById[1348865206]},
+	}
 
-	// Получаем названия листов по их идентификаторам
-	sheetNameConcert := sheetNamesById[sheetIdConcert]
-	sheetNameTheatre := sheetNamesById[sheetIdTheatre]
-	sheetNameFestivali := sheetNamesById[sheetIdFestivali]
-	sheetNameDetiam := sheetNamesById[sheetIdDetiam]
+	// Group events by type
+	eventGroups := map[string][][]interface{}{
+		"Концерт":   {},
+		"Театр":     {},
+		"Фестивали": {},
+		"Детям":     {},
+	}
 
-	// Группируем события по типу
-	concertEvents := [][]interface{}{}
-	theatreEvents := [][]interface{}{}
-	festivalEvents := [][]interface{}{}
-	kidsEvents := [][]interface{}{}
-
-	// Фасуем события по срезам
+	// Фасуем полученные ивенты по группам
 	for _, event := range events {
 		row := []interface{}{event.Title, event.Date, event.Location, event.Link, event.EventType}
-		switch event.EventType {
-		case "Концерт":
-			concertEvents = append(concertEvents, row)
-		case "Театр":
-			theatreEvents = append(theatreEvents, row)
-		case "Фестивали":
-			festivalEvents = append(festivalEvents, row)
-		case "Детям":
-			kidsEvents = append(kidsEvents, row)
+		if _, exists := eventGroups[event.EventType]; exists {
+			eventGroups[event.EventType] = append(eventGroups[event.EventType], row)
 		}
 	}
 
-	// Сохраняем данные на соответствующие листы
-	saveToSheet(srv, ctx, spreadSheetId, sheetNameConcert, concertEvents)
-	saveToSheet(srv, ctx, spreadSheetId, sheetNameTheatre, theatreEvents)
-	saveToSheet(srv, ctx, spreadSheetId, sheetNameDetiam, kidsEvents)
-	saveToSheet(srv, ctx, spreadSheetId, sheetNameFestivali, festivalEvents)
+	// В соответствии названием листа направлям сгруппированные элементы
+	for eventType, details := range sheetMap {
+		if events, exists := eventGroups[eventType]; exists {
+			err := saveToSheet(service, spreadSheetId, details.Title, events)
+			if err != nil {
+				log.Printf("unable to save events to sheet %s: %v", details.Title, err)
+				return fmt.Errorf("unable to save events to sheet %s: %v", details.Title, err)
+			}
+			log.Printf("Events saved to sheet %s successfully", details.Title)
+		}
+	}
+
+	return nil
 }
 
-func saveToSheet(srv *sheets.Service, ctx context.Context, spreadSheetId, sheetName string, values [][]interface{}) {
-	log.Printf("Saving data to spreadsheet: %s, sheet: %s", spreadSheetId, sheetName)
+func saveToSheet(service *sheets.Service, spreadsheetId, sheetName string, data [][]interface{}) error {
+	log.Printf("saveToSheet called with sheetName: %s", sheetName) // Лог в начале функции
 
-	records := sheets.ValueRange{
-		Values: values,
+	writeRange := fmt.Sprintf("%s!A1", sheetName)
+	valueRange := &sheets.ValueRange{
+		Values: data,
 	}
 
-	_, err := srv.Spreadsheets.Values.Append(spreadSheetId, sheetName, &records).
-		ValueInputOption("USER_ENTERED").
-		InsertDataOption("INSERT_ROWS").
-		Context(ctx).Do()
-
+	_, err := service.Spreadsheets.Values.Update(spreadsheetId, writeRange, valueRange).ValueInputOption("RAW").Do()
 	if err != nil {
-		log.Printf("Error saving data to spreadsheet: %v", err)
-		return
+		log.Printf("unable to write data to spreadsheet: %v", err)
+		return fmt.Errorf("unable to write data to spreadsheet: %v", err)
 	}
 
-	log.Println("Data saved successfully")
+	log.Printf("Data written to spreadsheet %s in range %s", spreadsheetId, writeRange)
+	return nil
 }

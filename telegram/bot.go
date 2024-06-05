@@ -226,7 +226,7 @@ func runWebScraper(bot *tgbotapi.BotAPI, chatID int64) {
 	allEvents := web.WebScraper(siteConfigs)
 
 	// Cохраняем все что нашли в google таблицы
-	spreadsheets.SaveDataToSpreadSheet(allEvents)
+	spreadsheets.WriteToSpreadsheet(allEvents)
 
 	msg := tgbotapi.NewMessage(chatID, "Ищейкин сделал дело. Проверьте результат по ссылке: https://docs.google.com/spreadsheets/d/1G8eLUjCeqBZ9dqQJiWxJ3GfjBS9Oqd4_lLnaRMsCbYo/edit#gid=0")
 	bot.Send(msg)
