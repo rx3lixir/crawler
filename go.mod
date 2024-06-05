@@ -3,7 +3,7 @@ module github.com/rx3lixir/crawler
 go 1.22.2
 
 require (
-	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/gocolly/colly v1.2.0
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/net v0.25.0
@@ -32,7 +32,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.12.4 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
-	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect

@@ -77,14 +77,20 @@ func SaveDataToSpreadSheet(events []configs.EventConfig) {
 	// Идентификаторы листов для "Концерт" и "Театр"
 	sheetIdConcert := int64(0)
 	sheetIdTheatre := int64(434585164)
+	sheetIdFestivali := int64(301169124)
+	sheetIdDetiam := int64(1348865206)
 
 	// Получаем названия листов по их идентификаторам
 	sheetNameConcert := sheetNamesById[sheetIdConcert]
 	sheetNameTheatre := sheetNamesById[sheetIdTheatre]
+	sheetNameFestivali := sheetNamesById[sheetIdFestivali]
+	sheetNameDetiam := sheetNamesById[sheetIdDetiam]
 
 	// Группируем события по типу
 	concertEvents := [][]interface{}{}
 	theatreEvents := [][]interface{}{}
+	festivalEvents := [][]interface{}{}
+	kidsEvents := [][]interface{}{}
 
 	// Фасуем события по срезам
 	for _, event := range events {
@@ -94,12 +100,18 @@ func SaveDataToSpreadSheet(events []configs.EventConfig) {
 			concertEvents = append(concertEvents, row)
 		case "Театр":
 			theatreEvents = append(theatreEvents, row)
+		case "Фестивали":
+			festivalEvents = append(festivalEvents, row)
+		case "Детям":
+			kidsEvents = append(kidsEvents, row)
 		}
 	}
 
 	// Сохраняем данные на соответствующие листы
 	saveToSheet(srv, ctx, spreadSheetId, sheetNameConcert, concertEvents)
 	saveToSheet(srv, ctx, spreadSheetId, sheetNameTheatre, theatreEvents)
+	saveToSheet(srv, ctx, spreadSheetId, sheetNameDetiam, kidsEvents)
+	saveToSheet(srv, ctx, spreadSheetId, sheetNameFestivali, festivalEvents)
 }
 
 func saveToSheet(srv *sheets.Service, ctx context.Context, spreadSheetId, sheetName string, values [][]interface{}) {
