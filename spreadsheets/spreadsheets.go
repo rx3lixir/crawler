@@ -43,12 +43,13 @@ func WriteToSpreadsheet(events []configs.EventConfig) error {
 	}
 
 	client := config.Client(ctx)
+
 	service, err := sheets.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
 		return fmt.Errorf("error creating Sheets service: %v", err)
 	}
 
-	log.Println("...Getting data from Google API")
+	log.Println("Getting data from Google API")
 
 	// Делаем запрос на получение данных с Google Sheets API
 	spreadSheetRes, err := service.Spreadsheets.Get(spreadSheetId).Fields("sheets(properties(sheetId,title))").Do()
@@ -58,6 +59,7 @@ func WriteToSpreadsheet(events []configs.EventConfig) error {
 
 	// Создаем отображение для хранения названий листов по их идентификаторам
 	sheetNamesById := make(map[int64]string)
+
 	for _, sheet := range spreadSheetRes.Sheets {
 		props := sheet.Properties
 		sheetNamesById[props.SheetId] = props.Title
@@ -106,6 +108,7 @@ func saveToSheet(service *sheets.Service, spreadsheetId, sheetName string, data 
 	log.Printf("saveToSheet called with sheetName: %s", sheetName) // Лог в начале функции
 
 	writeRange := fmt.Sprintf("%s!A1", sheetName)
+
 	valueRange := &sheets.ValueRange{
 		Values: data,
 	}

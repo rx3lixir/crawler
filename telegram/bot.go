@@ -66,7 +66,7 @@ func handleCommands(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
 		bot.Send(msg)
 		log.Println("Config command processed")
-	case "reset": // Новая команда "resetConfig"
+	case "reset":
 		resetConfig(bot, update.Message.Chat.ID)
 	default:
 		log.Printf("Unknown command: %s", command)
