@@ -1,15 +1,17 @@
 package main
 
 import (
+	"log"
+
 	"github.com/rx3lixir/crawler/appconfig"
 	"github.com/rx3lixir/crawler/telegram"
 )
 
 func main() {
 	// Загружаем конфиг приложения и все .env файлы
-	appconfig.LoadConfig()
+	if err := appconfig.LoadConfig(); err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
 
-	appInstance := *appconfig.AppInstance
-
-	telegram.StartBot(appInstance.TelegramToken)
+	telegram.StartBot(*appconfig.CrawlerApp)
 }

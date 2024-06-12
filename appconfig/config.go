@@ -1,7 +1,7 @@
 package appconfig
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -14,20 +14,26 @@ type AppConfig struct {
 }
 
 // Создаем инстанс для приложения
-var AppInstance *AppConfig
+var CrawlerApp *AppConfig
 
 // Загружает конфигурации и .env файлы
-func LoadConfig() {
+func LoadConfig() error {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		return fmt.Errorf("Error loading .env file: %v", err)
 	}
 
-	AppInstance = &AppConfig{
+	CrawlerApp = &AppConfig{
 		TelegramToken: os.Getenv("TG_BOT_TOKEN"),
 		GoogleAuthKey: os.Getenv("GOOGLE_AUTH_KEY"),
 		SpreadsheetID: os.Getenv("SPREADSHEET_ID"),
 	}
+
+	if CrawlerApp.TelegramToken == "" || CrawlerApp.GoogleAuthKey == "" || CrawlerApp.SpreadsheetID == "" {
+		return fmt.Errorf("incomplete configuration: missing environment variables")
+	}
+
+	return nil
 }
 
 type SiteConfig struct {
