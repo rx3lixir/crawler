@@ -8,11 +8,11 @@ import (
 	"sync"
 
 	"github.com/gocolly/colly"
-	"github.com/rx3lixir/crawler/config"
+	"github.com/rx3lixir/crawler/appconfig"
 )
 
-func WebScraper(allConfigs []configs.SiteConfig) []configs.EventConfig {
-	scrapedEvents := []configs.EventConfig{}
+func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
+	scrapedEvents := []appconfig.EventConfig{}
 
 	for _, config := range allConfigs {
 		events := extractEvents(config)
@@ -23,9 +23,9 @@ func WebScraper(allConfigs []configs.SiteConfig) []configs.EventConfig {
 	return scrapedEvents
 }
 
-func extractEvents(config configs.SiteConfig) []configs.EventConfig {
+func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
 	// A slice for all storing events
-	var extractedEvents []configs.EventConfig
+	var extractedEvents []appconfig.EventConfig
 
 	// Creating colly entity
 	c := colly.NewCollector()
@@ -62,32 +62,32 @@ func extractEvents(config configs.SiteConfig) []configs.EventConfig {
 	return extractedEvents
 }
 
-func extractEventFromElement(config configs.SiteConfig, element *colly.HTMLElement) (configs.EventConfig, error) {
+func extractEventFromElement(config appconfig.SiteConfig, element *colly.HTMLElement) (appconfig.EventConfig, error) {
 	// Initializing entity for getting DOM elements
 	elemDOM := element.DOM
 
 	// Getting base URL
 	baseURL, err := url.Parse(config.UrlToVisit)
 	if err != nil {
-		return configs.EventConfig{}, fmt.Errorf("error parsing base URL: %v", err)
+		return appconfig.EventConfig{}, fmt.Errorf("error parsing base URL: %v", err)
 	}
 
 	// Getting href from link selector
 	href, exists := elemDOM.Find(config.LinkSelector).Attr("href")
 	if !exists {
-		return configs.EventConfig{}, fmt.Errorf("no href found for %s", elemDOM.Find(config.TitleSelector).Text())
+		return appconfig.EventConfig{}, fmt.Errorf("no href found for %s", elemDOM.Find(config.TitleSelector).Text())
 	}
 
 	// Parsing url from href attr
 	link, err := url.Parse(href)
 	if err != nil {
-		return configs.EventConfig{}, fmt.Errorf("error parsing link URL: %v", err)
+		return appconfig.EventConfig{}, fmt.Errorf("error parsing link URL: %v", err)
 	}
 
 	// Resolving reference for full URl
 	fullURL := baseURL.ResolveReference(link)
 
-	eventToExtract := configs.EventConfig{
+	eventToExtract := appconfig.EventConfig{
 		Title:     elemDOM.Find(config.TitleSelector).Text(),
 		Date:      elemDOM.Find(config.DateSelector).Text(),
 		Location:  strings.TrimSpace(elemDOM.Find(config.LocationSelector).Text()),

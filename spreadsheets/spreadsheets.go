@@ -6,7 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/rx3lixir/crawler/config"
+	"github.com/rx3lixir/crawler/appconfig"
+
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
@@ -18,7 +19,7 @@ type sheetDetails struct {
 	Title string
 }
 
-func WriteToSpreadsheet(events []configs.EventConfig) error {
+func WriteToSpreadsheet(events []appconfig.EventConfig) error {
 	log.Println("WriteToSpreadsheet called")
 
 	// Загружаем переменные окружения

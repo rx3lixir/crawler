@@ -10,7 +10,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-	"github.com/rx3lixir/crawler/config"
+	"github.com/rx3lixir/crawler/appconfig"
 	"github.com/rx3lixir/crawler/spreadsheets"
 	"github.com/rx3lixir/crawler/web"
 )
@@ -76,7 +76,7 @@ func handleCommands(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 }
 
 // Переменная для хранения пользовательских конфигураций для поиска
-var userConfigs []configs.SiteConfig
+var userConfigs []appconfig.SiteConfig
 
 func handleConfigFileUpload(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	log.Println("Handling file upload")
@@ -139,7 +139,7 @@ func handleConfigFileUpload(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		return
 	}
 
-	// Разбираем JSON-файл на структуры configs.SiteConfig
+	// Разбираем JSON-файл на структуры appconfig.SiteConfig
 	err = json.Unmarshal(fileBytes, &userConfigs)
 	if err != nil {
 		log.Printf("Error unmarshalling JSON: %v", err)
@@ -157,7 +157,7 @@ func handleConfigFileUpload(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 func resetConfig(bot *tgbotapi.BotAPI, chatID int64) {
 	// Устанавливаем дефолтные конфигурации для поиска
 
-	afishaConfigConcert := configs.SiteConfig{
+	afishaConfigConcert := appconfig.SiteConfig{
 		UrlToVisit:        "https://bar.afishagoroda.ru/events/festivali",
 		EventType:         "Фестивали",
 		AnchestorSelector: "div.events-elem",
@@ -167,7 +167,7 @@ func resetConfig(bot *tgbotapi.BotAPI, chatID int64) {
 		LinkSelector:      "a.img-wrap",
 	}
 
-	afishaConfigTheater := configs.SiteConfig{
+	afishaConfigTheater := appconfig.SiteConfig{
 		UrlToVisit:        "https://bar.afishagoroda.ru/events/detiam",
 		EventType:         "Детям",
 		AnchestorSelector: "div.events-elem",
@@ -191,7 +191,7 @@ func resetConfig(bot *tgbotapi.BotAPI, chatID int64) {
 
 func runWebScraper(bot *tgbotapi.BotAPI, chatID int64) {
 	// Дефолтная конфигурация для поиска
-	afishaConfigConcert := configs.SiteConfig{
+	afishaConfigConcert := appconfig.SiteConfig{
 		UrlToVisit:        "https://bar.afishagoroda.ru/events/festivali",
 		EventType:         "Фестивали",
 		AnchestorSelector: "div.events-elem",
@@ -201,7 +201,7 @@ func runWebScraper(bot *tgbotapi.BotAPI, chatID int64) {
 		LinkSelector:      "a.img-wrap",
 	}
 
-	afishaConfigTheater := configs.SiteConfig{
+	afishaConfigTheater := appconfig.SiteConfig{
 		UrlToVisit:        "https://bar.afishagoroda.ru/events/detiam",
 		EventType:         "Детям",
 		AnchestorSelector: "div.events-elem",
@@ -212,14 +212,14 @@ func runWebScraper(bot *tgbotapi.BotAPI, chatID int64) {
 	}
 
 	// Создаем переменную для хранения конфигураций сайтов предназначенных для поиска
-	var siteConfigs []configs.SiteConfig
+	var siteConfigs []appconfig.SiteConfig
 
 	// Используем конфигурации, загруженные пользователем, если они есть
 	if len(userConfigs) > 0 {
 		siteConfigs = userConfigs
 	} else {
 		// Если пользовательские конфигурации отсутствуют, используем конфигурации по умолчанию
-		siteConfigs = []configs.SiteConfig{afishaConfigConcert, afishaConfigTheater}
+		siteConfigs = []appconfig.SiteConfig{afishaConfigConcert, afishaConfigTheater}
 	}
 
 	// Ищем ивенты по конфигурации
