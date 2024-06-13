@@ -15,6 +15,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
+// URL-адрес для получения прав доступа к Google Sheets API.
 const (
 	googleAuthScope = "https://www.googleapis.com/auth/spreadsheets"
 )

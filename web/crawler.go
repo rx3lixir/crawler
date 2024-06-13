@@ -11,32 +11,42 @@ import (
 	"github.com/rx3lixir/crawler/appconfig"
 )
 
+// WebScraper принимает конфигурации сайтов и возвращает список событий, извлеченных из этих сайтов
 func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
-	scrapedEvents := []appconfig.EventConfig{}
+	var scrapedEvents []appconfig.EventConfig
+	var wg sync.WaitGroup // WaitGroup для синхронизации горутин
+	var mu sync.Mutex     // Mutex для синхронизации доступа к срезу scrapedEvents
 
 	for _, config := range allConfigs {
-		events := extractEvents(config)
+		wg.Add(1)
+		go func(config appconfig.SiteConfig) {
+			defer wg.Done()
+			events := extractEvents(config)
 
-		scrapedEvents = append(scrapedEvents, events...)
+			mu.Lock()
+			scrapedEvents = append(scrapedEvents, events...)
+			mu.Unlock()
+		}(config)
 	}
+
+	wg.Wait() // Ждем завершения всех горутин
 
 	return scrapedEvents
 }
 
+// extractEvents принимает конфигурацию сайта и возвращает список событий, извлеченных из этого сайта
 func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
-	// A slice for all storing events
 	var extractedEvents []appconfig.EventConfig
 
-	// Creating colly entity
+	// Создаем colly коллектора
 	c := colly.NewCollector()
 
-	var wg sync.WaitGroup // Создаем WaitGroup для синхронизации горутин
+	var wg sync.WaitGroup // WaitGroup для синхронизации горутин
 
 	c.OnHTML(config.AnchestorSelector, func(element *colly.HTMLElement) {
-		wg.Add(1) // Увеличиваем счетчик WaitGroup перед созданием горутины
-
+		wg.Add(1)
 		go func() {
-			defer wg.Done() // Уменьшаем счетчик WaitGroup после выполнения горутины
+			defer wg.Done()
 
 			event, err := extractEventFromElement(config, element)
 			if err != nil {
@@ -44,7 +54,11 @@ func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
 				return
 			}
 
+			// Mutex для синхронизации доступа к срезу extractedEvents
+			mu := sync.Mutex{}
+			mu.Lock()
 			extractedEvents = append(extractedEvents, event)
+			mu.Unlock()
 		}()
 	})
 
@@ -54,7 +68,7 @@ func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
 
 	err := c.Visit(config.UrlToVisit)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Error visiting URL: %v", err)
 	}
 
 	wg.Wait() // Ждем завершения всех горутин
@@ -62,31 +76,33 @@ func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
 	return extractedEvents
 }
 
+// extractEventFromElement извлекает событие из HTML элемента в соответствии с конфигурацией сайта
 func extractEventFromElement(config appconfig.SiteConfig, element *colly.HTMLElement) (appconfig.EventConfig, error) {
-	// Initializing entity for getting DOM elements
+	// Получаем DOM элемент
 	elemDOM := element.DOM
 
-	// Getting base URL
+	// Парсим базовый URL
 	baseURL, err := url.Parse(config.UrlToVisit)
 	if err != nil {
 		return appconfig.EventConfig{}, fmt.Errorf("error parsing base URL: %v", err)
 	}
 
-	// Getting href from link selector
+	// Извлекаем href из селектора ссылки
 	href, exists := elemDOM.Find(config.LinkSelector).Attr("href")
 	if !exists {
 		return appconfig.EventConfig{}, fmt.Errorf("no href found for %s", elemDOM.Find(config.TitleSelector).Text())
 	}
 
-	// Parsing url from href attr
+	// Парсим URL из href
 	link, err := url.Parse(href)
 	if err != nil {
 		return appconfig.EventConfig{}, fmt.Errorf("error parsing link URL: %v", err)
 	}
 
-	// Resolving reference for full URl
+	// Создаем полный URL
 	fullURL := baseURL.ResolveReference(link)
 
+	// Создаем структуру события
 	eventToExtract := appconfig.EventConfig{
 		Title:     elemDOM.Find(config.TitleSelector).Text(),
 		Date:      elemDOM.Find(config.DateSelector).Text(),
