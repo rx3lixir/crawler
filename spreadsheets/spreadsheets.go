@@ -28,8 +28,6 @@ type sheetDetails struct {
 
 // WriteToSpreadsheet записывает события в Google Sheets
 func WriteToSpreadsheet(events []appconfig.EventConfig, crawlerAppConfig appconfig.AppConfig) error {
-	log.Println("WriteToSpreadsheet called")
-
 	// Декодируем ключ авторизации из base64
 	credBytes, err := base64.StdEncoding.DecodeString(crawlerAppConfig.GoogleAuthKey)
 	if err != nil {
@@ -56,16 +54,19 @@ func WriteToSpreadsheet(events []appconfig.EventConfig, crawlerAppConfig appconf
 	}
 
 	log.Println("Getting data from Google API")
-	// Получаем информацию о листах в таблице
+
+	// Получаем информацию о листах в таблице(id и названия листов)
 	sheetNamesById, err := getSheetNames(service, crawlerAppConfig.SpreadsheetID)
 	if err != nil {
 		return err
 	}
+	log.Printf("sheetNames: %v", sheetNamesById)
 
 	// Группируем события по типам
 	eventGroups := groupEventsByType(events)
 
 	var wg sync.WaitGroup
+
 	errChan := make(chan error, len(eventGroups))
 
 	// Для каждого типа событий запускаем горутину для записи данных в соответствующий лист
@@ -129,7 +130,6 @@ func groupEventsByType(events []appconfig.EventConfig) map[string][][]interface{
 
 // saveToSheet записывает данные в указанный лист Google Sheets
 func saveToSheet(service *sheets.Service, spreadsheetId, sheetName string, data [][]interface{}) error {
-	log.Printf("saveToSheet called with sheetName: %s", sheetName)
 	writeRange := fmt.Sprintf("%s!A1", sheetName)
 
 	valueRange := &sheets.ValueRange{

@@ -61,22 +61,13 @@ func resetConfigHandler(bot *tgbotapi.BotAPI, chatID int64) {
 func runWebScraperHandler(bot *tgbotapi.BotAPI, chatID int64, crawlerAppConfig appconfig.AppConfig) {
 	defaultConfigs := []appconfig.SiteConfig{
 		{
-			UrlToVisit:        "https://bar.afishagoroda.ru/events/festivali",
-			EventType:         "Фестивали",
-			AnchestorSelector: "div.events-elem",
-			TitleSelector:     "a.title",
-			DateSelector:      "div.date",
-			LocationSelector:  "div.place",
-			LinkSelector:      "a.img-wrap",
-		},
-		{
-			UrlToVisit:        "https://bar.afishagoroda.ru/events/detiam",
-			EventType:         "Детям",
-			AnchestorSelector: "div.events-elem",
-			TitleSelector:     "a.title",
-			DateSelector:      "div.date",
-			LocationSelector:  "div.place",
-			LinkSelector:      "a.img-wrap",
+			UrlToVisit:        "https://stonemir.ru/blog/",
+			EventType:         "Клубы",
+			AnchestorSelector: "div.article-inner",
+			TitleSelector:     "h3.post",
+			DateSelector:      "div.js-store-prod-descr",
+			LocationSelector:  "div.js-product-price",
+			LinkSelector:      "a",
 		},
 	}
 
