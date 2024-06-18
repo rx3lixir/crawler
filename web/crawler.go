@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net/url"
@@ -11,19 +12,27 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/rx3lixir/crawler/appconfig"
+	"golang.org/x/sync/semaphore"
 )
+
+const maxConcurrentScrapes = 5
 
 // WebScraper принимает конфигурации сайтов и возвращает список событий, извлеченных из этих сайтов
 func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
 	var scrapedEvents []appconfig.EventConfig
-
 	var wg sync.WaitGroup
 	var mu sync.Mutex
+	sem := semaphore.NewWeighted(maxConcurrentScrapes)
 
 	for _, config := range allConfigs {
 		wg.Add(1)
 		go func(config appconfig.SiteConfig) {
 			defer wg.Done()
+			if err := sem.Acquire(context.Background(), 1); err != nil {
+				log.Printf("Failed to acquire semaphore: %v", err)
+				return
+			}
+			defer sem.Release(1)
 			log.Printf("Starting extraction for site: %s", config.UrlToVisit)
 			events := extractEvents(config)
 

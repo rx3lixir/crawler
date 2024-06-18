@@ -1,13 +1,27 @@
 const puppeteer = require("puppeteer");
 
 let browser;
+let pagePool = [];
 
-async function scrapePage(url, selector) {
+async function initializeBrowser() {
   if (!browser) {
     browser = await puppeteer.launch();
   }
+}
 
-  const page = await browser.newPage();
+async function getPage() {
+  if (pagePool.length > 0) {
+    return pagePool.pop();
+  }
+  return await browser.newPage();
+}
+
+async function releasePage(page) {
+  pagePool.push(page);
+}
+
+async function scrapePage(url, selector) {
+  const page = await getPage();
 
   try {
     console.log(`Navigating to ${url}`);
@@ -23,7 +37,7 @@ async function scrapePage(url, selector) {
     console.error(`Error: ${err.message}`);
     return null;
   } finally {
-    await page.close();
+    await releasePage(page);
   }
 }
 
@@ -37,6 +51,7 @@ process.on("exit", closeBrowser);
 process.on("SIGINT", closeBrowser);
 
 (async () => {
+  await initializeBrowser();
   const url = process.argv[2];
   const selector = process.argv[3];
 
