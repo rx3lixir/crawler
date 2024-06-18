@@ -1,10 +1,10 @@
 package web
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net/url"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -17,22 +17,24 @@ import (
 func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
 	var scrapedEvents []appconfig.EventConfig
 
-	var wg sync.WaitGroup // WaitGroup для синхронизации горутин
-	var mu sync.Mutex     // Mutex для синхронизации доступа к срезу scrapedEvents
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 
 	for _, config := range allConfigs {
 		wg.Add(1)
 		go func(config appconfig.SiteConfig) {
 			defer wg.Done()
+			log.Printf("Starting extraction for site: %s", config.UrlToVisit)
 			events := extractEvents(config)
 
 			mu.Lock()
 			scrapedEvents = append(scrapedEvents, events...)
 			mu.Unlock()
+			log.Printf("Finished extraction for site: %s", config.UrlToVisit)
 		}(config)
 	}
 
-	wg.Wait() // Ждем завершения всех горутин
+	wg.Wait()
 
 	return scrapedEvents
 }
@@ -41,21 +43,27 @@ func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
 func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
 	var extractedEvents []appconfig.EventConfig
 
-	filePath := "rendered_page.html"
-	cmd := exec.Command("node", "web/scrape.js", config.UrlToVisit, config.AnchestorSelector, filePath)
-	cmdOutput, err := cmd.CombinedOutput()
+	cmd := exec.Command("node", "web/scrape.js", config.UrlToVisit, config.AnchestorSelector)
+	var cmdOutput bytes.Buffer
+	cmd.Stdout = &cmdOutput
+	cmd.Stderr = &cmdOutput
+
+	log.Printf("Running Puppeteer script for URL: %s", config.UrlToVisit)
+	err := cmd.Run()
 	if err != nil {
-		log.Printf("Error running Puppeteer script: %v, Output: %s", err, string(cmdOutput))
+		log.Printf("Error running Puppeteer script: %v, Output: %s", err, cmdOutput.String())
 		return extractedEvents
 	}
 
-	htmlContent, err := os.ReadFile(filePath)
-	if err != nil {
-		log.Printf("Error reading rendered HTML: %v", err)
+	htmlContent := cmdOutput.String()
+	if htmlContent == "" {
+		log.Printf("No HTML content fetched for URL: %s", config.UrlToVisit)
 		return extractedEvents
 	}
 
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(htmlContent)))
+	log.Printf("HTML content fetched for URL: %s", config.UrlToVisit)
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
 		log.Printf("Error parsing HTML: %v", err)
 		return extractedEvents
@@ -70,42 +78,32 @@ func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
 		extractedEvents = append(extractedEvents, event)
 	})
 
-	// Удаляем файл после обработки
-	if err := os.Remove(filePath); err != nil {
-		log.Printf("Error removing temp file: %v", err)
-	}
-
 	return extractedEvents
 }
 
 // extractEventFromElement извлекает событие из HTML элемента в соответствии с конфигурацией сайта
 func extractEventFromElement(config appconfig.SiteConfig, element *goquery.Selection) (appconfig.EventConfig, error) {
-	// Парсим базовый URL
 	baseURL, err := url.Parse(config.UrlToVisit)
 	if err != nil {
 		return appconfig.EventConfig{}, fmt.Errorf("error parsing base URL: %v", err)
 	}
 
-	// Извлекаем href из селектора ссылки
 	href, exists := element.Find(config.LinkSelector).Attr("href")
 
 	var fullURL *url.URL
 	if exists {
-		// Парсим URL из href
 		link, err := url.Parse(href)
 		if err != nil {
 			return appconfig.EventConfig{}, fmt.Errorf("error parsing link URL: %v", err)
 		}
-		// Создаем полный URL
 		fullURL = baseURL.ResolveReference(link)
 	}
 
-	// Создаем структуру события
 	eventToExtract := appconfig.EventConfig{
 		Title:     strings.TrimSpace(element.Find(config.TitleSelector).Text()),
 		Date:      strings.TrimSpace(element.Find(config.DateSelector).Text()),
-		Location:  config.LocationSelector, // strings.TrimSpace(element.Find(config.LocationSelector).Text()),
-		Link:      config.UrlToVisit,       // Устанавливаем пустой URL по умолчанию
+		Location:  config.LocationSelector,
+		Link:      config.UrlToVisit,
 		EventType: config.EventType,
 	}
 
