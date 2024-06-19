@@ -6,6 +6,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/rx3lixir/crawler/appconfig"
+	"github.com/rx3lixir/crawler/spreadsheets"
 )
 
 func StartBot(crawlerAppConfig appconfig.AppConfig) {
@@ -51,16 +52,20 @@ func handleCommands(bot *tgbotapi.BotAPI, update *tgbotapi.Update, crawlerAppCon
 
 	switch command {
 	case "start":
-		sendMessageHandler(bot, chatId, "Добро Пожаловать! Запустите /run чтобы начать работу")
+		sendMessageHandler(bot, chatId, "Добро Пожаловать! Запустите /config чтобы задать конфигурацию и /run чтобы запустить поиск!")
 	case "run":
 		sendMessageHandler(bot, chatId, "Запускаю веб-скраппинг!")
 		runWebScraperHandler(bot, update.Message.Chat.ID, crawlerAppConfig)
 	case "config":
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Пожалуйста, отправьте файл с конфигурациями")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Пожалуйста, отправьте файл с конфигурациями. Файл должен быть в формате .json")
 		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
 		bot.Send(msg)
 	case "reset":
 		resetConfigHandler(bot, update.Message.Chat.ID)
+		sendMessageHandler(bot, chatId, "Конфигурации успешно сброшены! Нажмите /config чтобы задать новые!")
+	case "clear":
+		spreadsheets.ClearAllSheets(crawlerAppConfig)
+		sendMessageHandler(bot, chatId, "Листы в таблице очищены! Пора что-нибудь найти и скорее их заполнить!")
 	default:
 		sendMessageHandler(bot, chatId, "Что-то пошло не так... Может не верно ввели команду?")
 	}

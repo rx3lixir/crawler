@@ -48,10 +48,6 @@ func resetConfigHandler(bot *tgbotapi.BotAPI, chatID int64) {
 	// Обновляем глобальную переменную userConfigs
 	userConfigs = nil
 
-	// Отправляем сообщение об успешном сбросе конфигураций
-	msg := tgbotapi.NewMessage(chatID, "Конфигурации успешно сброшены к дефолтным значениям")
-	bot.Send(msg)
-
 	// Пример использования переменных
 	fmt.Printf("Конфиг сброшен, ищем: %s", afishaConfigConcert)
 	fmt.Printf("Конфиг сброшен, ищем: %s", afishaConfigTheater)

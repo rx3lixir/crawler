@@ -98,6 +98,55 @@ func WriteToSpreadsheet(events []appconfig.EventConfig, crawlerAppConfig appconf
 	return nil
 }
 
+// ClearAllSheets очищает все листы в таблице Google Sheets
+func ClearAllSheets(crawlerAppConfig appconfig.AppConfig) error {
+	// Декодируем ключ авторизации из base64
+	credBytes, err := base64.StdEncoding.DecodeString(crawlerAppConfig.GoogleAuthKey)
+	if err != nil {
+		return fmt.Errorf("error decoding key JSON: %v", err)
+	}
+
+	// Создаем контекст с тайм-аутом
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Создаем конфигурацию для авторизации через JWT
+	config, err := google.JWTConfigFromJSON(credBytes, googleAuthScope)
+	if err != nil {
+		return fmt.Errorf("error creating JWT config: %v", err)
+	}
+
+	// Создаем HTTP клиент
+	client := config.Client(ctx)
+
+	// Создаем сервис для работы с Google Sheets API
+	service, err := sheets.NewService(ctx, option.WithHTTPClient(client))
+	if err != nil {
+		return fmt.Errorf("error creating Sheets service: %v", err)
+	}
+
+	log.Println("Getting data from Google API")
+
+	// Получаем информацию о листах в таблице(id и названия листов)
+	sheetNamesById, err := getSheetNames(service, crawlerAppConfig.SpreadsheetID)
+	if err != nil {
+		return err
+	}
+	log.Printf("sheetNames: %v", sheetNamesById)
+
+	for _, details := range sheetNamesById {
+		clearRange := fmt.Sprintf("%s!A:Z", details.Title)
+		clearRequest := &sheets.ClearValuesRequest{}
+		_, err := service.Spreadsheets.Values.Clear(crawlerAppConfig.SpreadsheetID, clearRange, clearRequest).Do()
+		if err != nil {
+			return fmt.Errorf("unable to clear sheet %s: %v", details.Title, err)
+		}
+		log.Printf("Sheet %s cleared successfully", details.Title)
+	}
+
+	return nil
+}
+
 // getSheetNames получает имена листов в таблице Google Sheets
 func getSheetNames(service *sheets.Service, spreadsheetId string) (map[string]sheetDetails, error) {
 	res, err := service.Spreadsheets.Get(spreadsheetId).Fields("sheets(properties(sheetId,title))").Do()
