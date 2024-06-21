@@ -52,16 +52,16 @@ func handleCommands(bot *tgbotapi.BotAPI, update *tgbotapi.Update, crawlerAppCon
 
 	switch command {
 	case "start":
-		sendMessageHandler(bot, chatId, "Добро Пожаловать! Запустите /config чтобы задать конфигурацию и /run чтобы запустить поиск!")
+		sendMessageHandler(bot, chatId, "Добро Пожаловать! Перед началом рекомендую сбросить текущие конфигурации с помощью /reset и очистить таблицу с помощью /clear. Запустите /config чтобы задать конфигурацию и /run чтобы запустить поиск!")
 	case "run":
-		sendMessageHandler(bot, chatId, "Запускаю веб-скраппинг!")
+		sendMessageHandler(bot, chatId, "Запускаю веб-скраппинг! Пожалуйста подождите, обычно это занимает не более 2 минут")
 		runWebScraperHandler(bot, update.Message.Chat.ID, crawlerAppConfig)
 	case "config":
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Пожалуйста, отправьте файл с конфигурациями. Файл должен быть в формате .json")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Пожалуйста, отправьте файл с конфигурациями. Проверьте чтобы он файл был в формате .json")
 		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
 		bot.Send(msg)
 	case "reset":
-		resetConfigHandler(bot)
+		resetConfigHandler()
 		sendMessageHandler(bot, chatId, "Конфигурации успешно сброшены! Нажмите /config чтобы задать новые!")
 	case "clear":
 		sendMessageHandler(bot, chatId, "Очищаю таблицу...")

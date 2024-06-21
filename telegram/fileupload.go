@@ -21,7 +21,7 @@ func handleFileUpload(bot *tgbotapi.BotAPI, update *tgbotapi.Update) {
 
 	// Получаем файл, отправленный пользователем
 	if update.Message.Document == nil {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Вы не прикрепили файл с конфигурациями")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Вы не прикрепили файл с конфигурациями :(")
 		bot.Send(msg)
 		return
 	}
@@ -32,7 +32,7 @@ func handleFileUpload(bot *tgbotapi.BotAPI, update *tgbotapi.Update) {
 	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
 		log.Printf("Error getting file info: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка получения файла")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка получения файла, пожалуйста, попробуйте позже")
 		bot.Send(msg)
 		return
 	}
@@ -55,7 +55,7 @@ func handleFileUpload(bot *tgbotapi.BotAPI, update *tgbotapi.Update) {
 	resp, err := http.Get(fileURL)
 	if err != nil {
 		log.Printf("Error downloading file: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка скачивания файла")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка скачивания файла, повторите попытку позднее")
 		bot.Send(msg)
 		return
 	}
@@ -76,13 +76,13 @@ func handleFileUpload(bot *tgbotapi.BotAPI, update *tgbotapi.Update) {
 	err = json.Unmarshal(fileBytes, &userConfigs)
 	if err != nil {
 		log.Printf("Error unmarshalling JSON: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка разбора JSON")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка разбора файла конфигурации, проверьте ошибки синтаксиса внутри файла")
 		bot.Send(msg)
 		return
 	}
 
 	log.Println("Configurations successfully loaded")
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Конфигурации успешно загружены")
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Конфигурации успешно загружены! Запустите поиск с помощью /run")
 	bot.Send(msg)
 }
