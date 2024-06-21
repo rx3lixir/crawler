@@ -23,7 +23,7 @@ func sendMessageHandler(bot *tgbotapi.BotAPI, chatID int64, text string) {
 }
 
 // Сбрасывает конфигурационный файл
-func resetConfigHandler(bot *tgbotapi.BotAPI, chatID int64) {
+func resetConfigHandler(bot *tgbotapi.BotAPI) {
 	// Устанавливаем дефолтные конфигурации для поиска
 	afishaConfigConcert := appconfig.SiteConfig{
 		UrlToVisit:        "https://bar.afishagoroda.ru/events/festivali",

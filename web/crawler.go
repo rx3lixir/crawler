@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/rx3lixir/crawler/appconfig"
@@ -27,7 +28,7 @@ func init() {
 	log.SetLevel(logrus.InfoLevel)
 }
 
-// WebScraper принимает конфигурации сайтов и возвращает список событий, извлеченных из этих сайтов
+// WebScraper processes site configurations and returns a list of extracted events.
 func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
 	var scrapedEvents []appconfig.EventConfig
 	var wg sync.WaitGroup
@@ -45,6 +46,7 @@ func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
 				return
 			}
 			defer sem.Release(1)
+
 			log.Infof("Starting extraction for site: %s", config.UrlToVisit)
 			events := extractEvents(config)
 
@@ -60,51 +62,60 @@ func WebScraper(allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
 	return scrapedEvents
 }
 
-// extractEvents принимает конфигурацию сайта и возвращает список событий, извлеченных из этого сайта
+// extractEvents extracts events from a given site configuration.
 func extractEvents(config appconfig.SiteConfig) []appconfig.EventConfig {
 	var extractedEvents []appconfig.EventConfig
 
-	cmd := exec.Command("node", "web/scrape.js", config.UrlToVisit, config.AnchestorSelector)
-	var cmdOutput bytes.Buffer
-	cmd.Stdout = &cmdOutput
-	cmd.Stderr = &cmdOutput
+	for retries := 0; retries < 3; retries++ {
+		cmd := exec.Command("node", "web/scrape.js", config.UrlToVisit, config.AnchestorSelector)
+		var cmdOutput bytes.Buffer
+		cmd.Stdout = &cmdOutput
+		cmd.Stderr = &cmdOutput
 
-	log.Infof("Running Puppeteer script for URL: %s", config.UrlToVisit)
-	err := cmd.Run()
-	if err != nil {
-		log.Errorf("Error running Puppeteer script: %v, Output: %s", err, cmdOutput.String())
-		return extractedEvents
-	}
-
-	htmlContent := cmdOutput.String()
-	if htmlContent == "" {
-		log.Warnf("No HTML content fetched for URL: %s", config.UrlToVisit)
-		return extractedEvents
-	}
-
-	log.Infof("HTML content fetched for URL: %s", config.UrlToVisit)
-
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
-	if err != nil {
-		log.Errorf("Error parsing HTML: %v", err)
-		return extractedEvents
-	}
-
-	doc.Find(config.AnchestorSelector).Each(func(i int, s *goquery.Selection) {
-		log.Infof("Found element with selector %s on URL: %s", config.AnchestorSelector, config.UrlToVisit)
-		event, err := extractEventFromElement(config, s)
+		log.Infof("Running Puppeteer script for URL: %s", config.UrlToVisit)
+		err := cmd.Run()
 		if err != nil {
-			log.Errorf("Error extracting event: %v", err)
-			return
+			log.Errorf("Error running Puppeteer script: %v, Output: %s", err, cmdOutput.String())
+			if retries < 2 {
+				log.Infof("Retrying... (%d/3)", retries+1)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			return extractedEvents
 		}
-		log.Infof("Extracted event: %+v", event)
-		extractedEvents = append(extractedEvents, event)
-	})
+
+		htmlContent := cmdOutput.String()
+		if htmlContent == "" {
+			log.Warnf("No HTML content fetched for URL: %s", config.UrlToVisit)
+			return extractedEvents
+		}
+
+		log.Infof("HTML content fetched for URL: %s", config.UrlToVisit)
+
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+		if err != nil {
+			log.Errorf("Error parsing HTML: %v", err)
+			return extractedEvents
+		}
+
+		doc.Find(config.AnchestorSelector).Each(func(i int, s *goquery.Selection) {
+			log.Infof("Found element with selector %s on URL: %s", config.AnchestorSelector, config.UrlToVisit)
+			event, err := extractEventFromElement(config, s)
+			if err != nil {
+				log.Errorf("Error extracting event: %v", err)
+				return
+			}
+			log.Infof("Extracted event: %+v", event)
+			extractedEvents = append(extractedEvents, event)
+		})
+
+		return extractedEvents
+	}
 
 	return extractedEvents
 }
 
-// extractEventFromElement извлекает событие из HTML элемента в соответствии с конфигурацией сайта
+// extractEventFromElement extracts an event from a HTML element based on site configuration.
 func extractEventFromElement(config appconfig.SiteConfig, element *goquery.Selection) (appconfig.EventConfig, error) {
 	baseURL, err := url.Parse(config.UrlToVisit)
 	if err != nil {

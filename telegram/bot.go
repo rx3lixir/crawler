@@ -61,9 +61,10 @@ func handleCommands(bot *tgbotapi.BotAPI, update *tgbotapi.Update, crawlerAppCon
 		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
 		bot.Send(msg)
 	case "reset":
-		resetConfigHandler(bot, update.Message.Chat.ID)
+		resetConfigHandler(bot)
 		sendMessageHandler(bot, chatId, "Конфигурации успешно сброшены! Нажмите /config чтобы задать новые!")
 	case "clear":
+		sendMessageHandler(bot, chatId, "Очищаю таблицу...")
 		spreadsheets.ClearAllSheets(crawlerAppConfig)
 		sendMessageHandler(bot, chatId, "Листы в таблице очищены! Пора что-нибудь найти и скорее их заполнить!")
 	default:
