@@ -17,14 +17,14 @@ type AppConfig struct {
 var CrawlerApp *AppConfig
 
 // Загружает конфигурации и .env файлы
-func LoadConfig() error {
+func LoadConfig(telegramToken string) error {
 	err := godotenv.Load()
 	if err != nil {
 		return fmt.Errorf("Error loading .env file: %v", err)
 	}
 
 	CrawlerApp = &AppConfig{
-		TelegramToken: os.Getenv("TG_BOT_TOKEN"),
+		TelegramToken: telegramToken,
 		GoogleAuthKey: os.Getenv("GOOGLE_AUTH_KEY"),
 		SpreadsheetID: os.Getenv("SPREADSHEET_ID"),
 	}
