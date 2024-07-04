@@ -1,38 +1,61 @@
 package appconfig
 
 import (
+	"encoding/json"
 	"fmt"
-	"os"
-
 	"github.com/joho/godotenv"
+	"os"
 )
 
 type AppConfig struct {
-	TelegramToken string
-	GoogleAuthKey string
-	SpreadsheetID string
+	TelegramToken string `json:"telegram_token"`
+	GoogleAuthKey string `json:"google_auth_key"`
+	SpreadsheetID string `json:"spreadsheet_id"`
 }
 
-// Создаем инстанс для приложения
 var CrawlerApp *AppConfig
 
-// Загружает конфигурации и .env файлы
-func LoadConfig(telegramToken string) error {
+func LoadConfig(configPath string) error {
+	if configPath != "" {
+		return loadConfigFromFile(configPath)
+	}
+	return loadConfigFromEnv()
+}
+
+func loadConfigFromFile(configPath string) error {
+	file, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("Error reading config file: %v", err)
+	}
+
+	config := &AppConfig{}
+	if err := json.Unmarshal(file, config); err != nil {
+		return fmt.Errorf("Error parsing config file: %v", err)
+	}
+
+	CrawlerApp = config
+	return validateConfig()
+}
+
+func loadConfigFromEnv() error {
 	err := godotenv.Load()
 	if err != nil {
 		return fmt.Errorf("Error loading .env file: %v", err)
 	}
 
 	CrawlerApp = &AppConfig{
-		TelegramToken: telegramToken,
+		TelegramToken: os.Getenv("TELEGRAM_TOKEN"),
 		GoogleAuthKey: os.Getenv("GOOGLE_AUTH_KEY"),
 		SpreadsheetID: os.Getenv("SPREADSHEET_ID"),
 	}
 
-	if CrawlerApp.TelegramToken == "" || CrawlerApp.GoogleAuthKey == "" || CrawlerApp.SpreadsheetID == "" {
-		return fmt.Errorf("incomplete configuration: missing environment variables")
-	}
+	return validateConfig()
+}
 
+func validateConfig() error {
+	if CrawlerApp.TelegramToken == "" || CrawlerApp.GoogleAuthKey == "" || CrawlerApp.SpreadsheetID == "" {
+		return fmt.Errorf("incomplete configuration: missing required values")
+	}
 	return nil
 }
 
