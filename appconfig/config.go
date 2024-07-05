@@ -11,9 +11,22 @@ type AppConfig struct {
 	TelegramToken string `json:"telegram_token"`
 	GoogleAuthKey string `json:"google_auth_key"`
 	SpreadsheetID string `json:"spreadsheet_id"`
+	MaxWorkers    int
+	MaxRetries    int
+	Job           Job
+	Result        Result
 }
 
 var CrawlerApp *AppConfig
+
+type Job struct {
+	Config SiteConfig
+}
+
+type Result struct {
+	Events []EventConfig
+	Err    error
+}
 
 func LoadConfig(configPath string) error {
 	if configPath != "" {
@@ -34,6 +47,9 @@ func loadConfigFromFile(configPath string) error {
 	}
 
 	CrawlerApp = config
+	CrawlerApp.MaxRetries = 3
+	CrawlerApp.MaxWorkers = 15
+
 	return validateConfig()
 }
 

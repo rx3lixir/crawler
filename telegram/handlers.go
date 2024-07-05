@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"log"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -38,7 +39,10 @@ func runWebScraperHandler(bot *tgbotapi.BotAPI, chatID int64, crawlerAppConfig a
 		return
 	}
 
-	allEvents := web.WebScraper(siteConfigs)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	allEvents := web.WebScraper(crawlerAppConfig, ctx, siteConfigs)
 	spreadsheets.WriteToSpreadsheet(allEvents, *&crawlerAppConfig)
 
 	sendMessageHandler(bot, chatID, "Ищейкин сделал дело. Проверьте результат по ссылке: https://docs.google.com/spreadsheets/d/1G8eLUjCeqBZ9dqQJiWxJ3GfjBS9Oqd4_lLnaRMsCbYo/edit#gid=0")
