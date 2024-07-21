@@ -1,29 +1,22 @@
 package web
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/chromedp/chromedp"
 	"github.com/rx3lixir/crawler/appconfig"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 )
 
 var (
-	log        = logrus.New()
-	httpClient = &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 20,
-		},
-	}
+	log = logrus.New()
 )
 
 func init() {
@@ -34,54 +27,81 @@ func init() {
 	log.SetLevel(logrus.InfoLevel)
 }
 
-// WebScraper processes site configurations and returns a list of extracted events.
 func WebScraper(crawlerAppConfig appconfig.AppConfig, ctx context.Context, allConfigs []appconfig.SiteConfig) []appconfig.EventConfig {
+	log.Printf("WebScraper started with %d configs", len(allConfigs))
 
 	jobs := make(chan appconfig.Job, len(allConfigs))
 	results := make(chan appconfig.Result, len(allConfigs))
 
 	workerCount := crawlerAppConfig.MaxWorkers
+	if workerCount == 0 {
+		workerCount = len(allConfigs)
+	}
+	log.Printf("Using %d workers", workerCount)
 
-	// Start worker pool
+	limiter := rate.NewLimiter(rate.Every(time.Second), 5)
+
+	var wg sync.WaitGroup
 	for i := 0; i < workerCount; i++ {
-		go worker(crawlerAppConfig, ctx, jobs, results)
+		wg.Add(1)
+		go worker(crawlerAppConfig, ctx, jobs, results, limiter, &wg)
 	}
 
-	// Send jobs to the pool
+	log.Printf("Sending jobs to workers")
 	for _, config := range allConfigs {
 		jobs <- appconfig.Job{Config: config}
 	}
 	close(jobs)
 
-	// Collect results
+	go func() {
+		wg.Wait()
+		close(results)
+		log.Printf("All workers finished")
+	}()
+
 	var scrapedEvents []appconfig.EventConfig
-	for i := 0; i < len(allConfigs); i++ {
-		select {
-		case result := <-results:
-			if result.Err != nil {
-				log.Errorf("Error processing job: %v", result.Err)
-			} else {
-				scrapedEvents = append(scrapedEvents, result.Events...)
-			}
-		case <-ctx.Done():
-			log.Warn("Context cancelled, stopping web scraper")
-			return scrapedEvents
+
+	log.Printf("Collecting results")
+	for result := range results {
+		if result.Err != nil {
+			log.Warnf("Error processing job: %v", result.Err)
+		} else {
+			scrapedEvents = append(scrapedEvents, result.Events...)
 		}
 	}
 
+	log.Printf("WebScraper finished, scraped %d events", len(scrapedEvents))
 	return scrapedEvents
 }
 
-func worker(crawlerAppConfig appconfig.AppConfig, ctx context.Context, jobs <-chan appconfig.Job, results chan<- appconfig.Result) {
+func worker(crawlerAppConfig appconfig.AppConfig, ctx context.Context, jobs <-chan appconfig.Job, results chan<- appconfig.Result, limiter *rate.Limiter, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	// Create a new browser context for each worker
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+	)
+	allocCtx, cancel := chromedp.NewExecAllocator(ctx, opts...)
+	defer cancel()
+
+	browserCtx, cancel := chromedp.NewContext(allocCtx)
+	defer cancel()
+
 	for job := range jobs {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			log.Infof("Starting extraction for site: %s", job.Config.UrlToVisit)
-			events, err := extractEvents(crawlerAppConfig, ctx, job.Config)
+			if err := limiter.Wait(ctx); err != nil {
+				results <- appconfig.Result{Err: err}
+				continue
+			}
+			log.Debugf("Starting extraction for site: %s", job.Config.UrlToVisit)
+			events, err := extractEvents(crawlerAppConfig, browserCtx, job.Config)
 			results <- appconfig.Result{Events: events, Err: err}
-			log.Infof("Finished extraction for site: %s", job.Config.UrlToVisit)
+			log.Debugf("Finished extraction for site: %s", job.Config.UrlToVisit)
 		}
 	}
 }
@@ -89,7 +109,7 @@ func worker(crawlerAppConfig appconfig.AppConfig, ctx context.Context, jobs <-ch
 func extractEvents(crawlerAppConfig appconfig.AppConfig, ctx context.Context, config appconfig.SiteConfig) ([]appconfig.EventConfig, error) {
 	var extractedEvents []appconfig.EventConfig
 
-	html, err := fetchHTMLWithRetry(crawlerAppConfig, ctx, config)
+	html, err := fetchHTMLWithChromedp(ctx, config.UrlToVisit, config.AnchestorSelector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch HTML: %w", err)
 	}
@@ -102,7 +122,7 @@ func extractEvents(crawlerAppConfig appconfig.AppConfig, ctx context.Context, co
 	doc.Find(config.AnchestorSelector).Each(func(i int, s *goquery.Selection) {
 		event, err := extractEventFromElement(config, s)
 		if err != nil {
-			log.Errorf("Error extracting event: %v", err)
+			log.Warnf("Error extracting event: %v", err)
 			return
 		}
 		extractedEvents = append(extractedEvents, event)
@@ -111,65 +131,21 @@ func extractEvents(crawlerAppConfig appconfig.AppConfig, ctx context.Context, co
 	return extractedEvents, nil
 }
 
-func fetchHTMLWithRetry(crawlerAppConfig appconfig.AppConfig, ctx context.Context, config appconfig.SiteConfig) (string, error) {
-	var html string
-	var err error
+func fetchHTMLWithChromedp(ctx context.Context, urlToVisit, selector string) (string, error) {
+	var htmlContent string
 
-	for retries := 0; retries < int(crawlerAppConfig.MaxRetries); retries++ {
-		html, err = fetchHTML(ctx, config)
-		if err == nil {
-			return html, nil
-		}
-
-		log.Warnf("Error fetching HTML (attempt %d/%d): %v", retries+1, appconfig.CrawlerApp.MaxRetries, err)
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(time.Duration(retries+1) * time.Second):
-			// Exponential backoff
-		}
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(urlToVisit),
+		chromedp.WaitVisible(selector, chromedp.ByQuery),
+		chromedp.OuterHTML("html", &htmlContent),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to navigate and extract HTML: %w", err)
 	}
 
-	return "", fmt.Errorf("failed to fetch HTML after %d retries: %w", appconfig.CrawlerApp.MaxRetries, err)
+	return htmlContent, nil
 }
 
-func fetchHTML(ctx context.Context, config appconfig.SiteConfig) (string, error) {
-	reqBody, err := json.Marshal(map[string]string{
-		"url":      config.UrlToVisit,
-		"selector": config.AnchestorSelector,
-	})
-	if err != nil {
-		return "", fmt.Errorf("error preparing request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:3000/scrape", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error making request to Puppeteer service: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %w", err)
-	}
-
-	var result struct {
-		HTML string `json:"html"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("error parsing response: %w", err)
-	}
-
-	return result.HTML, nil
-}
-
-// extractEventFromElement extracts an event from a HTML element based on site configuration.
 func extractEventFromElement(config appconfig.SiteConfig, element *goquery.Selection) (appconfig.EventConfig, error) {
 	baseURL, err := url.Parse(config.UrlToVisit)
 	if err != nil {
@@ -177,7 +153,7 @@ func extractEventFromElement(config appconfig.SiteConfig, element *goquery.Selec
 	}
 
 	href, exists := element.Find(config.LinkSelector).Attr("href")
-	log.Infof("Link found: %v (exists: %v)", href, exists)
+	log.Debugf("Link found: %v (exists: %v)", href, exists)
 
 	var fullURL *url.URL
 	if exists {
@@ -200,7 +176,7 @@ func extractEventFromElement(config appconfig.SiteConfig, element *goquery.Selec
 		eventToExtract.Link = fullURL.String()
 	}
 
-	log.Infof("Extracted event details: %+v", eventToExtract)
+	log.Debugf("Extracted event details: %+v", eventToExtract)
 
 	return eventToExtract, nil
 }

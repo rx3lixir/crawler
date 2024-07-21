@@ -47,8 +47,8 @@ func loadConfigFromFile(configPath string) error {
 	}
 
 	CrawlerApp = config
-	CrawlerApp.MaxRetries = 3
-	CrawlerApp.MaxWorkers = 15
+	CrawlerApp.MaxRetries = 1
+	CrawlerApp.MaxWorkers = 25
 
 	return validateConfig()
 }

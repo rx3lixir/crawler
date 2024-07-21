@@ -6,9 +6,11 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"fmt"
 	"github.com/rx3lixir/crawler/appconfig"
 	"github.com/rx3lixir/crawler/spreadsheets"
 	"github.com/rx3lixir/crawler/web"
+	"time"
 )
 
 // Переменная для хранения пользовательских конфигураций для поиска
@@ -30,20 +32,37 @@ func resetConfigHandler() {
 
 // Запускает веб-скраппинг применяя конфигурацию
 func runWebScraperHandler(bot *tgbotapi.BotAPI, chatID int64, crawlerAppConfig appconfig.AppConfig) {
-	var siteConfigs []appconfig.SiteConfig
+	log.Printf("Starting runWebScraperHandler")
 
+	var siteConfigs []appconfig.SiteConfig
 	if len(userConfigs) > 0 {
 		siteConfigs = userConfigs
+		log.Printf("Using user configs, count: %d", len(siteConfigs))
 	} else {
+		log.Printf("No user configs found")
 		sendMessageHandler(bot, chatID, "Конфигурация не задана. Запустите /config чтобы добавить файл конфигурации")
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	log.Printf("Creating context")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
+	log.Printf("Starting WebScraper")
 	allEvents := web.WebScraper(crawlerAppConfig, ctx, siteConfigs)
-	spreadsheets.WriteToSpreadsheet(allEvents, *&crawlerAppConfig)
 
+	log.Printf("WebScraper finished, events count: %d", len(allEvents))
+
+	log.Printf("Writing to spreadsheet")
+	err := spreadsheets.WriteToSpreadsheet(allEvents, crawlerAppConfig)
+	if err != nil {
+		log.Printf("Error writing to spreadsheet: %v", err)
+		sendMessageHandler(bot, chatID, fmt.Sprintf("Ошибка при записи в таблицу: %v", err))
+		return
+	}
+
+	log.Printf("Sending completion message")
 	sendMessageHandler(bot, chatID, "Ищейкин сделал дело. Проверьте результат по ссылке: https://docs.google.com/spreadsheets/d/1G8eLUjCeqBZ9dqQJiWxJ3GfjBS9Oqd4_lLnaRMsCbYo/edit#gid=0")
+
+	log.Printf("runWebScraperHandler completed")
 }
