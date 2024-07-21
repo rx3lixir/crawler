@@ -49,24 +49,51 @@ func WebScraper(crawlerAppConfig appconfig.AppConfig, ctx context.Context, allCo
 
 	log.Printf("Sending jobs to workers")
 	for _, config := range allConfigs {
-		jobs <- appconfig.Job{Config: config}
+		select {
+		case jobs <- appconfig.Job{Config: config}:
+			log.Printf("Sent job for %s", config.UrlToVisit)
+		case <-ctx.Done():
+			log.Printf("Context cancelled while sending jobs")
+			return nil
+		}
 	}
 	close(jobs)
 
+	done := make(chan struct{})
 	go func() {
 		wg.Wait()
-		close(results)
+		close(done)
 		log.Printf("All workers finished")
 	}()
 
 	var scrapedEvents []appconfig.EventConfig
+	timeout := time.After(15 * time.Minute)
 
 	log.Printf("Collecting results")
-	for result := range results {
-		if result.Err != nil {
-			log.Warnf("Error processing job: %v", result.Err)
-		} else {
-			scrapedEvents = append(scrapedEvents, result.Events...)
+
+collectLoop:
+	for {
+		select {
+		case result, ok := <-results:
+			if !ok {
+				log.Printf("Results channel closed")
+				break collectLoop
+			}
+			if result.Err != nil {
+				log.Warnf("Error processing job: %v", result.Err)
+			} else {
+				scrapedEvents = append(scrapedEvents, result.Events...)
+				log.Printf("Collected %d events from a job", len(result.Events))
+			}
+		case <-done:
+			log.Printf("All jobs completed")
+			break collectLoop
+		case <-timeout:
+			log.Printf("Timeout reached while collecting results")
+			break collectLoop
+		case <-ctx.Done():
+			log.Printf("Context cancelled while collecting results")
+			return scrapedEvents
 		}
 	}
 
@@ -77,7 +104,6 @@ func WebScraper(crawlerAppConfig appconfig.AppConfig, ctx context.Context, allCo
 func worker(crawlerAppConfig appconfig.AppConfig, ctx context.Context, jobs <-chan appconfig.Job, results chan<- appconfig.Result, limiter *rate.Limiter, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	// Create a new browser context for each worker
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
@@ -92,42 +118,52 @@ func worker(crawlerAppConfig appconfig.AppConfig, ctx context.Context, jobs <-ch
 	for job := range jobs {
 		select {
 		case <-ctx.Done():
+			log.Printf("Worker context cancelled")
 			return
 		default:
 			if err := limiter.Wait(ctx); err != nil {
+				log.Printf("Rate limiter error: %v", err)
 				results <- appconfig.Result{Err: err}
 				continue
 			}
-			log.Debugf("Starting extraction for site: %s", job.Config.UrlToVisit)
+			log.Printf("Starting extraction for site: %s", job.Config.UrlToVisit)
 			events, err := extractEvents(crawlerAppConfig, browserCtx, job.Config)
+			if err != nil {
+				log.Printf("Error extracting events from %s: %v", job.Config.UrlToVisit, err)
+			} else {
+				log.Printf("Extracted %d events from %s", len(events), job.Config.UrlToVisit)
+			}
 			results <- appconfig.Result{Events: events, Err: err}
-			log.Debugf("Finished extraction for site: %s", job.Config.UrlToVisit)
+			log.Printf("Finished extraction for site: %s", job.Config.UrlToVisit)
 		}
 	}
 }
 
 func extractEvents(crawlerAppConfig appconfig.AppConfig, ctx context.Context, config appconfig.SiteConfig) ([]appconfig.EventConfig, error) {
-	var extractedEvents []appconfig.EventConfig
+	log.Printf("Extracting events from %s", config.UrlToVisit)
 
 	html, err := fetchHTMLWithChromedp(ctx, config.UrlToVisit, config.AnchestorSelector)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch HTML: %w", err)
+		return nil, fmt.Errorf("failed to fetch HTML from %s: %w", config.UrlToVisit, err)
 	}
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		return nil, fmt.Errorf("error parsing HTML: %w", err)
+		return nil, fmt.Errorf("error parsing HTML from %s: %w", config.UrlToVisit, err)
 	}
+
+	var extractedEvents []appconfig.EventConfig
 
 	doc.Find(config.AnchestorSelector).Each(func(i int, s *goquery.Selection) {
 		event, err := extractEventFromElement(config, s)
 		if err != nil {
-			log.Warnf("Error extracting event: %v", err)
+			log.Warnf("Error extracting event from %s: %v", config.UrlToVisit, err)
 			return
 		}
 		extractedEvents = append(extractedEvents, event)
 	})
 
+	log.Printf("Extracted %d events from %s", len(extractedEvents), config.UrlToVisit)
 	return extractedEvents, nil
 }
 
