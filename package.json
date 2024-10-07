@@ -1,7 +1,8 @@
 {
 	"dependencies": {
 		"express": "^4.19.2",
-		"puppeteer": "^22.12.1",
+		"puppeteer": "^23.3.0",
+		"puppeteer-core": "^23.3.0",
 		"winston": "^3.13.0"
 	}
 }
